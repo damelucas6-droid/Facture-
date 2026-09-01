@@ -2,17 +2,71 @@
 API FastAPI pour la génération dynamique de factures PDF professionnelles.
 """
 
-from fastapi import FastAPI, HTTPException, status
+import os
+import logging
+from fastapi import FastAPI, HTTPException, status, Request
 from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from pdf_service import generate_invoice_pdf
+from config import (
+    API_TITLE, API_DESCRIPTION, API_VERSION,
+    LOG_LEVEL, LOG_FILE, MAX_REQUESTS_PER_MINUTE
+)
+
+# ============================================================================
+# CONFIGURATION DU LOGGING
+# ============================================================================
+# Créer le dossier logs s'il n'existe pas
+os.makedirs("logs", exist_ok=True)
+
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# ============================================================================
+# RATE LIMITING
+# ============================================================================
+limiter = Limiter(key_func=get_remote_address)
 
 # Initialisation de l'application FastAPI
 app = FastAPI(
-    title="API de Génération de Factures PDF",
-    description="Génère des factures professionnelles au format PDF à la volée en mémoire avec FastAPI et ReportLab.",
-    version="1.0.0"
+    title=API_TITLE,
+    description=API_DESCRIPTION,
+    version=API_VERSION
 )
+
+# Ajouter le state pour le limiter
+app.state.limiter = limiter
+
+# Ajouter un gestionnaire d'erreur pour le rate limiting
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    logger.warning(f"Rate limit exceeded for {request.client.host}")
+    return HTMLResponse(
+        status_code=429,
+        content="<h1>429 Too Many Requests</h1><p>Vous avez dépassé le nombre de requêtes autorisées. Réessayez dans une minute.</p>"
+    )
+
+# Ajouter CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+logger.info(f"Application démarrée - Limite: {MAX_REQUESTS_PER_MINUTE} requêtes/minute")
 
 
 class InvoiceRequest(BaseModel):
@@ -55,16 +109,23 @@ class InvoiceRequest(BaseModel):
         },
         422: {
             "description": "Erreur de validation des données fournies (ex: montant négatif ou nom vide)."
+        },
+        429: {
+            "description": "Trop de requêtes - limite de débit dépassée."
         }
     }
 )
-async def generate_invoice_endpoint(invoice_data: InvoiceRequest):
+@limiter.limit(f"{MAX_REQUESTS_PER_MINUTE}/minute")
+async def generate_invoice_endpoint(request: Request, invoice_data: InvoiceRequest):
     """
     Endpoint POST pour générer et télécharger la facture PDF.
     
     - **client_name** : Nom du client (obligatoire, chaîne non vide).
     - **amount** : Montant HT en euros (obligatoire, flottant > 0).
     """
+    client_ip = request.client.host
+    logger.info(f"[{client_ip}] Demande de génération de facture pour {invoice_data.client_name} ({invoice_data.amount}€)")
+    
     try:
         # Génération du PDF en mémoire
         pdf_buffer, invoice_number = generate_invoice_pdf(
@@ -82,13 +143,22 @@ async def generate_invoice_endpoint(invoice_data: InvoiceRequest):
             "X-Invoice-Number": invoice_number
         }
         
+        logger.info(f"[{client_ip}] Facture {invoice_number} générée avec succès ({len(pdf_buffer.getvalue())} bytes)")
+        
         return StreamingResponse(
             content=pdf_buffer,
             media_type="application/pdf",
             headers=headers
         )
         
+    except ValueError as e:
+        logger.error(f"[{client_ip}] Erreur de validation: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Erreur de validation: {str(e)}"
+        )
     except Exception as e:
+        logger.error(f"[{client_ip}] Erreur lors de la génération du PDF: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la génération du document PDF : {str(e)}"
@@ -96,10 +166,12 @@ async def generate_invoice_endpoint(invoice_data: InvoiceRequest):
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
-async def home():
+@limiter.limit(f"{MAX_REQUESTS_PER_MINUTE}/minute")
+async def home(request: Request):
     """
     Page d'accueil interactive permettant de tester directement l'API depuis le navigateur.
     """
+    logger.info(f"[{request.client.host}] Accès à la page d'accueil")
     return """
     <!DOCTYPE html>
     <html lang="fr">

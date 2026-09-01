@@ -1,11 +1,15 @@
 import io
 import uuid
+import logging
 from datetime import datetime, timedelta
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+from config import COMPANY, BANK, VAT_RATE, DEFAULT_PAYMENT_DAYS, PDF_COLORS, PDF_MARGINS_CM
+
+logger = logging.getLogger(__name__)
 
 
 def generate_invoice_pdf(client_name: str, amount_ht: float, vat_rate: float = 0.20) -> tuple[io.BytesIO, str]:
@@ -25,22 +29,22 @@ def generate_invoice_pdf(client_name: str, amount_ht: float, vat_rate: float = 0
     # 2. Métadonnées de la facture
     now = datetime.now()
     date_str = now.strftime("%d/%m/%Y")
-    due_date_str = (now + timedelta(days=30)).strftime("%d/%m/%Y")
+    due_date_str = (now + timedelta(days=DEFAULT_PAYMENT_DAYS)).strftime("%d/%m/%Y")
     invoice_number = f"FAC-{now.strftime('%Y%m')}-{uuid.uuid4().hex[:6].upper()}"
     
     # 3. Initialisation du buffer mémoire (in-memory BytesIO)
     buffer = io.BytesIO()
     
-    # Configuration du document A4 avec marges de 1.5 cm
+    # Configuration du document A4 avec marges configurables
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=1.5 * cm,
-        leftMargin=1.5 * cm,
-        topMargin=1.5 * cm,
-        bottomMargin=1.5 * cm,
+        rightMargin=PDF_MARGINS_CM * cm,
+        leftMargin=PDF_MARGINS_CM * cm,
+        topMargin=PDF_MARGINS_CM * cm,
+        bottomMargin=PDF_MARGINS_CM * cm,
         title=f"Facture {invoice_number}",
-        author="TechCorp Solutions"
+        author=COMPANY["name"]
     )
     
     story = []
@@ -48,12 +52,12 @@ def generate_invoice_pdf(client_name: str, amount_ht: float, vat_rate: float = 0
     # Styles typographiques
     styles = getSampleStyleSheet()
     
-    # Palette de couleurs modernes & professionnelles
-    PRIMARY_COLOR = colors.HexColor("#1E3A8A")   # Bleu marine professionnel
-    TEXT_DARK = colors.HexColor("#1F2937")       # Gris anthracite
-    TEXT_MUTED = colors.HexColor("#6B7280")      # Gris secondaire
-    BG_LIGHT = colors.HexColor("#F8FAFC")        # Fond cartes / encadrés
-    BORDER_COLOR = colors.HexColor("#E2E8F0")    # Bordures discrètes
+    # Palette de couleurs modernes & professionnelles (depuis config)
+    PRIMARY_COLOR = colors.HexColor(PDF_COLORS["primary"])
+    TEXT_DARK = colors.HexColor(PDF_COLORS["text_dark"])
+    TEXT_MUTED = colors.HexColor(PDF_COLORS["text_muted"])
+    BG_LIGHT = colors.HexColor(PDF_COLORS["bg_light"])
+    BORDER_COLOR = colors.HexColor(PDF_COLORS["border"])
     
     # Définition des styles personnalisés
     style_company_name = ParagraphStyle(
@@ -134,10 +138,10 @@ def generate_invoice_pdf(client_name: str, amount_ht: float, vat_rate: float = 0
     # 1. EN-TÊTE : Entreprise émettrice (Gauche) vs Infos Facture (Droite)
     # -------------------------------------------------------------
     company_info = [
-        Paragraph("<b>TECHCORP SOLUTIONS SAS</b>", style_company_name),
-        Paragraph("123 Avenue des Champs-Élysées, 75008 Paris", style_company_sub),
-        Paragraph("SIRET : 892 145 987 00012 — N° TVA : FR 45 892145987", style_company_sub),
-        Paragraph("contact@techcorp-solutions.fr | +33 (0)1 42 68 00 00", style_company_sub),
+        Paragraph(f"<b>{COMPANY['name']}</b>", style_company_name),
+        Paragraph(COMPANY['address'], style_company_sub),
+        Paragraph(f"SIRET : {COMPANY['siret']} — N° TVA : {COMPANY['vat_number']}", style_company_sub),
+        Paragraph(f"{COMPANY['email']} | {COMPANY['phone']}", style_company_sub),
     ]
     
     invoice_meta = [
@@ -276,8 +280,8 @@ def generate_invoice_pdf(client_name: str, amount_ht: float, vat_rate: float = 0
     bank_info = [
         Paragraph("<b>COORDONNÉES BANCAIRES POUR LE RÈGLEMENT</b>", style_section_title),
         Spacer(1, 3),
-        Paragraph("<b>Banque :</b> BNP Paribas Paris Étoile", style_body),
-        Paragraph("<b>IBAN :</b> FR76 3000 4000 0100 2458 9632 145 — <b>BIC :</b> BNPAFR22XXX", style_body),
+        Paragraph(f"<b>Banque :</b> {BANK['name']}", style_body),
+        Paragraph(f"<b>IBAN :</b> {BANK['iban']} — <b>BIC :</b> {BANK['bic']}", style_body),
         Paragraph(f"<b>Référence du virement :</b> {invoice_number}", style_body),
     ]
     
