@@ -83,15 +83,29 @@ class InvoiceRequest(BaseModel):
     amount: float = Field(
         ...,
         gt=0,
-        description="Montant Hors Taxe (HT) en euros. Doit être strictement supérieur à 0.",
+        description="Montant Hors Taxe (HT) en FCFA. Doit être strictement supérieur à 0.",
         examples=[1250.50]
+    )
+    apply_vat: bool = Field(
+        default=True,
+        description="Appliquer la TVA à la facture (true = avec TVA, false = sans TVA).",
+        examples=[True, False]
+    )
+    vat_rate: float = Field(
+        default=0.20,
+        ge=0,
+        le=1,
+        description="Taux de TVA à appliquer (entre 0 et 1, ex: 0.20 pour 20%). Ignoré si apply_vat=false.",
+        examples=[0.20, 0.055, 0.10]
     )
 
     model_config = {
         "json_schema_extra": {
             "example": {
                 "client_name": "Société Dupont & Associés",
-                "amount": 1500.00
+                "amount": 1500.00,
+                "apply_vat": True,
+                "vat_rate": 0.20
             }
         }
     }
@@ -121,17 +135,24 @@ async def generate_invoice_endpoint(request: Request, invoice_data: InvoiceReque
     Endpoint POST pour générer et télécharger la facture PDF.
     
     - **client_name** : Nom du client (obligatoire, chaîne non vide).
-    - **amount** : Montant HT en euros (obligatoire, flottant > 0).
+    - **amount** : Montant HT en FCFA (obligatoire, flottant > 0).
+    - **apply_vat** : Appliquer la TVA (optionnel, défaut: true).
+    - **vat_rate** : Taux de TVA personnalisé (optionnel, défaut: 0.20).
     """
     client_ip = request.client.host
-    logger.info(f"[{client_ip}] Demande de génération de facture pour {invoice_data.client_name} ({invoice_data.amount}€)")
+    
+    # Déterminer le taux de TVA à utiliser
+    effective_vat_rate = invoice_data.vat_rate if invoice_data.apply_vat else 0.0
+    
+    vat_status = "avec TVA" if invoice_data.apply_vat else "sans TVA"
+    logger.info(f"[{client_ip}] Demande de génération de facture pour {invoice_data.client_name} ({invoice_data.amount} FCFA {vat_status}, taux: {effective_vat_rate*100:.1f}%)")
     
     try:
         # Génération du PDF en mémoire
         pdf_buffer, invoice_number = generate_invoice_pdf(
             client_name=invoice_data.client_name.strip(),
             amount_ht=invoice_data.amount,
-            vat_rate=0.20  # TVA à 20%
+            vat_rate=effective_vat_rate
         )
         
         # Nom de fichier personnalisé pour le téléchargement
@@ -203,9 +224,28 @@ async def home(request: Request):
                 </div>
 
                 <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1">Montant (€ HT)</label>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Montant (FCFA HT)</label>
                     <input type="number" id="amount" step="0.01" min="0.01" required placeholder="Ex: 1450.00"
                         class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-slate-800">
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" id="apply_vat" checked
+                            class="w-5 h-5 rounded-md border border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                        <span class="text-sm font-semibold text-slate-700">Appliquer la TVA</span>
+                    </label>
+                    <div id="vatRateContainer" class="mt-3">
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Taux de TVA (%)</label>
+                        <div class="flex gap-2">
+                            <select id="vat_rate_preset"
+                                class="flex-1 px-3 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-slate-800">
+                                <option value="0.055">5.5% (Réduit)</option>
+                                <option value="0.10">10% (Intermédiaire)</option>
+                                <option value="0.20" selected>20% (Normal)</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 <button type="submit" id="submitBtn"
@@ -221,6 +261,14 @@ async def home(request: Request):
         </div>
 
         <script>
+            // Gérer l'affichage du champ de TVA selon la case à cocher
+            const applyVatCheckbox = document.getElementById('apply_vat');
+            const vatRateContainer = document.getElementById('vatRateContainer');
+            
+            applyVatCheckbox.addEventListener('change', () => {
+                vatRateContainer.style.display = applyVatCheckbox.checked ? 'block' : 'none';
+            });
+
             document.getElementById('invoiceForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const btn = document.getElementById('submitBtn');
@@ -228,6 +276,8 @@ async def home(request: Request):
                 
                 const client_name = document.getElementById('client_name').value.trim();
                 const amount = parseFloat(document.getElementById('amount').value);
+                const apply_vat = document.getElementById('apply_vat').checked;
+                const vat_rate = parseFloat(document.getElementById('vat_rate_preset').value);
 
                 if (!client_name || isNaN(amount) || amount <= 0) {
                     alert("Veuillez renseigner un nom valide et un montant strictement supérieur à 0.");
@@ -241,7 +291,12 @@ async def home(request: Request):
                     const response = await fetch('/generate-invoice', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ client_name, amount })
+                        body: JSON.stringify({ 
+                            client_name, 
+                            amount,
+                            apply_vat,
+                            vat_rate
+                        })
                     });
 
                     if (!response.ok) {

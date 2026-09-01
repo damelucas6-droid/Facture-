@@ -7,7 +7,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-from config import COMPANY, BANK, VAT_RATE, DEFAULT_PAYMENT_DAYS, PDF_COLORS, PDF_MARGINS_CM
+from config import COMPANY, BANK, VAT_RATE, DEFAULT_PAYMENT_DAYS, PDF_COLORS, PDF_MARGINS_CM, CURRENCY
 
 logger = logging.getLogger(__name__)
 
@@ -222,9 +222,9 @@ def generate_invoice_pdf(client_name: str, amount_ht: float, vat_rate: float = 0
                 style_body
             ),
             Paragraph("1", style_body),
-            Paragraph(f"{amount_ht:,.2f} €".replace(",", " ").replace(".", ","), style_body),
+            Paragraph(f"{amount_ht:,.2f} {CURRENCY}".replace(",", " ").replace(".", ","), style_body),
             Paragraph(f"{int(vat_rate*100)} %", style_body),
-            Paragraph(f"{amount_ht:,.2f} €".replace(",", " ").replace(".", ","), style_body_bold),
+            Paragraph(f"{amount_ht:,.2f} {CURRENCY}".replace(",", " ").replace(".", ","), style_body_bold),
         ]
     ]
     
@@ -250,11 +250,11 @@ def generate_invoice_pdf(client_name: str, amount_ht: float, vat_rate: float = 0
     # 4. BLOC TOTAL / RÉCAPITULATIF FINANCIER (HT, TVA, TTC)
     # -------------------------------------------------------------
     totals_data = [
-        [Paragraph("<b>Total Hors Taxes (HT) :</b>", style_body), Paragraph(f"{amount_ht:,.2f} €".replace(",", " ").replace(".", ","), style_body)],
-        [Paragraph(f"<b>TVA ({int(vat_rate*100)}%) :</b>", style_body), Paragraph(f"{amount_vat:,.2f} €".replace(",", " ").replace(".", ","), style_body)],
+        [Paragraph("<b>Total Hors Taxes (HT) :</b>", style_body), Paragraph(f"{amount_ht:,.2f} {CURRENCY}".replace(",", " ").replace(".", ","), style_body)],
+        [Paragraph(f"<b>TVA ({int(vat_rate*100)}%) :</b>", style_body), Paragraph(f"{amount_vat:,.2f} {CURRENCY}".replace(",", " ").replace(".", ","), style_body)],
         [
             Paragraph("<b>TOTAL TTC (Net à payer) :</b>", ParagraphStyle('TotalLabel', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=colors.white)), 
-            Paragraph(f"<b>{amount_ttc:,.2f} €</b>".replace(",", " ").replace(".", ","), ParagraphStyle('TotalVal', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, textColor=colors.white, alignment=2))
+            Paragraph(f"<b>{amount_ttc:,.2f} {CURRENCY}</b>".replace(",", " ").replace(".", ","), ParagraphStyle('TotalVal', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=11, textColor=colors.white, alignment=2))
         ],
     ]
     
@@ -298,11 +298,11 @@ def generate_invoice_pdf(client_name: str, amount_ht: float, vat_rate: float = 0
     story.append(Spacer(1, 15))
     
     legal_text = (
-        "<i>Mentions légales : En cas de retard de paiement, une indemnité forfaitaire pour frais de recouvrement de 40 € "
+        "<i>Mentions légales : En cas de retard de paiement, une indemnité forfaitaire pour frais de recouvrement de 40 {currency} "
         "sera exigible (Art. L441-6 du Code de commerce), ainsi que des pénalités au taux légal en vigueur. "
         "Pas d'escompte pour règlement anticipé.</i><br/><br/>"
         "<b>Nous vous remercions de votre confiance !</b>"
-    )
+    ).format(currency=CURRENCY)
     story.append(Paragraph(legal_text, ParagraphStyle('Legal', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=10, textColor=TEXT_MUTED, alignment=1)))
     
     # Génération du document dans le flux binaire

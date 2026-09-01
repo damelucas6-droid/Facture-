@@ -35,6 +35,7 @@ BANK = {
 # ============================================================================
 VAT_RATE = float(os.getenv("VAT_RATE", "0.20"))  # TVA par défaut = 20%
 DEFAULT_PAYMENT_DAYS = int(os.getenv("DEFAULT_PAYMENT_DAYS", "30"))  # Délai de paiement par défaut
+CURRENCY = os.getenv("CURRENCY", "FCFA")  # Devise (par défaut: FCFA)
 
 # ============================================================================
 # CONFIGURATION RÉSEAU & SÉCURITÉ
