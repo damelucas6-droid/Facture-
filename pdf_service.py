@@ -7,7 +7,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-from config import COMPANY, BANK, VAT_RATE, DEFAULT_PAYMENT_DAYS, PDF_COLORS, PDF_MARGINS_CM, CURRENCY
+from config import COMPANY, PAYMENT, VAT_RATE, DEFAULT_PAYMENT_DAYS, PDF_COLORS, PDF_MARGINS_CM, CURRENCY
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +140,7 @@ def generate_invoice_pdf(client_name: str, amount_ht: float, vat_rate: float = 0
     company_info = [
         Paragraph(f"<b>{COMPANY['name']}</b>", style_company_name),
         Paragraph(COMPANY['address'], style_company_sub),
-        Paragraph(f"SIRET : {COMPANY['siret']} — N° TVA : {COMPANY['vat_number']}", style_company_sub),
+        Paragraph(f"NIU : {COMPANY['niu']} — RCCM : {COMPANY['rccm']}", style_company_sub),
         Paragraph(f"{COMPANY['email']} | {COMPANY['phone']}", style_company_sub),
     ]
     
@@ -176,14 +176,14 @@ def generate_invoice_pdf(client_name: str, amount_ht: float, vat_rate: float = 0
         Paragraph(f"<b>{client_name}</b>", style_body_bold),
         Paragraph("Client Professionnel / Particulier", style_body),
         Paragraph("Adresse : Service Comptabilité / Facturation", style_body),
-        Paragraph("France", style_body),
+        Paragraph("Cameroun", style_body),
     ]
     
     payment_terms_box = [
         Paragraph("CONDITIONS DE RÈGLEMENT", style_section_title),
         Spacer(1, 4),
-        Paragraph("<b>Mode de paiement :</b> Virement bancaire", style_body),
-        Paragraph("<b>Délai :</b> 30 jours net", style_body),
+        Paragraph("<b>Mode de paiement :</b> Mobile Money", style_body),
+        Paragraph(f"<b>Délai :</b> {DEFAULT_PAYMENT_DAYS} jours net", style_body),
         Paragraph("<b>Statut :</b> En attente de paiement", style_body),
     ]
     
@@ -275,14 +275,14 @@ def generate_invoice_pdf(client_name: str, amount_ht: float, vat_rate: float = 0
     story.append(Spacer(1, 20))
     
     # -------------------------------------------------------------
-    # 5. PIED DE PAGE : COORDONNÉES BANCAIRES & MENTIONS LÉGALES
+    # 5. PIED DE PAGE : INFORMATIONS PAIEMENT MOBILE MONEY & MENTIONS LÉGALES
     # -------------------------------------------------------------
     bank_info = [
-        Paragraph("<b>COORDONNÉES BANCAIRES POUR LE RÈGLEMENT</b>", style_section_title),
+        Paragraph("<b>RÈGLEMENT PAR MOBILE MONEY</b>", style_section_title),
         Spacer(1, 3),
-        Paragraph(f"<b>Banque :</b> {BANK['name']}", style_body),
-        Paragraph(f"<b>IBAN :</b> {BANK['iban']} — <b>BIC :</b> {BANK['bic']}", style_body),
-        Paragraph(f"<b>Référence du virement :</b> {invoice_number}", style_body),
+        Paragraph(f"<b>MTN MoMo :</b> {PAYMENT['mtn_momo']}", style_body),
+        Paragraph(f"<b>Orange Money :</b> {PAYMENT['orange_money']}", style_body),
+        Paragraph(f"<b>Référence du paiement :</b> {invoice_number}", style_body),
     ]
     
     bank_table = Table([[bank_info]], colWidths=[18 * cm])
@@ -298,11 +298,8 @@ def generate_invoice_pdf(client_name: str, amount_ht: float, vat_rate: float = 0
     story.append(Spacer(1, 15))
     
     legal_text = (
-        "<i>Mentions légales : En cas de retard de paiement, une indemnité forfaitaire pour frais de recouvrement de 40 {currency} "
-        "sera exigible (Art. L441-6 du Code de commerce), ainsi que des pénalités au taux légal en vigueur. "
-        "Pas d'escompte pour règlement anticipé.</i><br/><br/>"
-        "<b>Nous vous remercions de votre confiance !</b>"
-    ).format(currency=CURRENCY)
+        "<i>Le règlement s'effectue par Mobile Money ou en espèces. Merci de votre confiance et à très bientôt !</i>"
+    )
     story.append(Paragraph(legal_text, ParagraphStyle('Legal', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=10, textColor=TEXT_MUTED, alignment=1)))
     
     # Génération du document dans le flux binaire

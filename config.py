@@ -13,21 +13,20 @@ load_dotenv()
 # CONFIGURATION DE L'ENTREPRISE
 # ============================================================================
 COMPANY = {
-    "name": os.getenv("COMPANY_NAME", "TECHCORP SOLUTIONS SAS"),
-    "address": os.getenv("COMPANY_ADDRESS", "123 Avenue des Champs-Élysées, 75008 Paris"),
-    "siret": os.getenv("COMPANY_SIRET", "892 145 987 00012"),
-    "vat_number": os.getenv("COMPANY_VAT_NUMBER", "FR 45 892145987"),
-    "email": os.getenv("COMPANY_EMAIL", "contact@techcorp-solutions.fr"),
-    "phone": os.getenv("COMPANY_PHONE", "+33 (0)1 42 68 00 00"),
+    "name": os.getenv("COMPANY_NAME", "KDLLDIGITAL SOLUTIONS SAS"),
+    "address": os.getenv("COMPANY_ADDRESS", "Quartier Bastos, Yaoundé - Cameroun"),
+    "niu": os.getenv("COMPANY_NIU", "P0123456789M"),
+    "rccm": os.getenv("COMPANY_RCCM", "RC/YAO/2024/A/1234"),
+    "email": os.getenv("COMPANY_EMAIL", "contact@kdlldigital-solutions.fr"),
+    "phone": os.getenv("COMPANY_PHONE", "+237 655 62 09 18"),
 }
 
 # ============================================================================
-# CONFIGURATION BANCAIRE
+# CONFIGURATION MOBILE MONEY
 # ============================================================================
-BANK = {
-    "name": os.getenv("BANK_NAME", "BNP Paribas Paris Étoile"),
-    "iban": os.getenv("BANK_IBAN", "FR76 3000 4000 0100 2458 9632 145"),
-    "bic": os.getenv("BANK_BIC", "BNPAFR22XXX"),
+PAYMENT = {
+    "mtn_momo": os.getenv("PAYMENT_MTN_MOMO", "+237 655 62 09 18"),
+    "orange_money": os.getenv("PAYMENT_ORANGE_MONEY", "+237 69X XX XX XX"),
 }
 
 # ============================================================================
@@ -77,8 +76,10 @@ def validate_config():
     """Valide que la configuration est correcte."""
     if not COMPANY["name"]:
         raise ValueError("COMPANY_NAME ne peut pas être vide")
-    if not BANK["iban"]:
-        raise ValueError("BANK_IBAN ne peut pas être vide")
+    if not COMPANY["niu"]:
+        raise ValueError("COMPANY_NIU ne peut pas être vide")
+    if not PAYMENT["mtn_momo"]:
+        raise ValueError("PAYMENT_MTN_MOMO ne peut pas être vide")
     if VAT_RATE < 0 or VAT_RATE > 1:
         raise ValueError("VAT_RATE doit être entre 0 et 1")
 
